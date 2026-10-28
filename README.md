@@ -1,20 +1,25 @@
 # mongo_dump_images
 
-Docker-образы с `mongodump` для MongoDB 7.x и 8.x.
+Docker-образ с `mongodump` для резервного копирования MongoDB.
 
-## Образы
+Образ собирается из `debian:bookworm-slim` и официального репозитория
+MongoDB 8.0: в него устанавливается пакет `mongodb-database-tools`
+(включает `mongodump`, `mongorestore`, `mongoexport` и другие утилиты).
 
-Оба образа публикуются в один пакет GHCR с тегами по линии MongoDB:
+`mongodump` из состава Database Tools 8.0 обратно совместим, поэтому один
+образ подходит для MongoDB 8.0 и более ранних поддерживаемых версий
+(7.0, 6.0, 5.0, 4.4).
 
-| Образ | Теги |
+## Образ
+
+Образ публикуется в GHCR:
+
+| Тег | Описание |
 | --- | --- |
-| MongoDB 7.x | `ghcr.io/durachyo/mongo-dump-images:7.x-<version>`, `ghcr.io/durachyo/mongo-dump-images:7.x` |
-| MongoDB 8.x | `ghcr.io/durachyo/mongo-dump-images:8.x-<version>`, `ghcr.io/durachyo/mongo-dump-images:8.x`, `ghcr.io/durachyo/mongo-dump-images:latest` |
+| `ghcr.io/durachyo/mongo-dump-images:<version>` | Версия релиза, например `1.2.3` |
+| `ghcr.io/durachyo/mongo-dump-images:latest` | Последний релиз |
 
-Например, для тега `v1.2.3` будут собраны:
-
-- `ghcr.io/durachyo/mongo-dump-images:7.x-1.2.3` и `7.x`
-- `ghcr.io/durachyo/mongo-dump-images:8.x-1.2.3`, `8.x` и `latest`
+Версионный тег неизменен, `latest` перезаписывается при каждом релизе.
 
 ## Релиз
 
@@ -25,15 +30,13 @@ git tag v1.2.3
 git push origin v1.2.3
 ```
 
-Workflow `.github/workflows/release.yaml` собирает оба образа параллельно
-(матрица `7.x` и `8.x`) и пушит их в GHCR. Теги `7.x` / `8.x` / `latest`
-перезаписываются при каждом релизе, версионные теги неизменны.
+Workflow `.github/workflows/release.yaml` собирает образ из `Dockerfile`
+в корне репозитория и пушит его в GHCR с тегами `1.2.3` и `latest`.
 
 ## Локальная сборка
 
 ```bash
-docker build -t mongo-dump:7.x ./7.x
-docker build -t mongo-dump:8.x ./8.x
+docker build -t mongo-dump:local .
 ```
 
 ## Использование
@@ -44,5 +47,22 @@ docker run --rm \
   -e PASS_DB=secret \
   -e MONGO_BACKUP_RETENTION_COUNT=7 \
   -v "$PWD/backups:/tmp/backup" \
-  ghcr.io/durachyo/mongo-dump-images:8.x
+  ghcr.io/durachyo/mongo-dump-images:latest
 ```
+
+Каждый запуск создаёт каталог `/tmp/backup/backup_<YYYYmmdd_HHMMSS>`,
+поэтому его нужно монтировать как volume, чтобы бэкапы сохранялись между
+запусками.
+
+### Переменные окружения
+
+| Переменная | По умолчанию | Описание |
+| --- | --- | --- |
+| `MONGO_HOST` | `localhost` | Хост MongoDB |
+| `MONGO_PORT_TCP_PORT` | `27017` | Порт MongoDB |
+| `USER_DB` | — | Имя пользователя для аутентификации |
+| `PASS_DB` | — | Пароль; при отсутствии `USER_DB` используется пользователь `admin` |
+| `MONGO_BACKUP_RETENTION_COUNT` | — | Сколько последних бэкапов хранить; `0` или пустое значение отключает очистку |
+
+Аутентификация выполняется с `authSource=admin`. Если не задан ни один из
+`USER_DB` / `PASS_DB`, подключение идёт без аутентификации.

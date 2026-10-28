@@ -11,12 +11,8 @@ permissions:
 
 jobs:
   docker:
-    name: MongoDB ${{ matrix.mongo }}
+    name: Build and push
     runs-on: ubuntu-24.04
-    strategy:
-      fail-fast: false
-      matrix:
-        mongo: ["7.x", "8.x"]
     steps:
       - name: Checkout
         uses: actions/checkout@v7.0.1
@@ -37,21 +33,20 @@ jobs:
         with:
           images: ghcr.io/${{ github.repository }}
           tags: |
-            type=semver,pattern={{version}},prefix=${{ matrix.mongo }}-
-            type=raw,value=${{ matrix.mongo }}
-            type=raw,value=latest,enable=${{ matrix.mongo == '8.x' }}
+            type=semver,pattern={{version}}
+            type=raw,value=latest
           labels: |
             org.opencontainers.image.title=mongo-dump-images
-            org.opencontainers.image.description=MongoDB ${{ matrix.mongo }} mongodump backup image
+            org.opencontainers.image.description=mongodump backup image with MongoDB Database Tools 4.4.x/5.x/6.x/7.x/8.x
 
       - name: Build and push
         uses: docker/build-push-action@v6
         with:
-          context: ./${{ matrix.mongo }}
-          file: ./${{ matrix.mongo }}/Dockerfile
+          context: .
+          file: ./Dockerfile
           platforms: linux/amd64
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha,scope=${{ matrix.mongo }}
-          cache-to: type=gha,mode=max,scope=${{ matrix.mongo }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
