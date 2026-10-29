@@ -7,7 +7,8 @@ MONGO_PORT_TCP_PORT="${MONGO_PORT_TCP_PORT:-27017}"
 MONGO_DB="${MONGO_DB:-}"
 MONGO_COLLECTION="${MONGO_COLLECTION:-}"
 EXCLUDE_SYSTEM_DBS="${EXCLUDE_SYSTEM_DBS:-true}"
-BACKUP_DIR="/tmp/backup"
+ARCHIVE_BACKUP="${ARCHIVE_BACKUP:-true}"
+BACKUP_DIR="${BACKUP_DIR:-/tmp/backup}"
 SYSTEM_DBS=(admin local config)
 
 is_system_db() {
@@ -48,10 +49,15 @@ else
 fi
 
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
-CURRENT_BACKUP_DIR="$BACKUP_DIR/backup_${TIMESTAMP}"
+BACKUP_NAME="backup_${TIMESTAMP}"
+CURRENT_BACKUP_DIR="$BACKUP_DIR/$BACKUP_NAME"
 mkdir -p "$CURRENT_BACKUP_DIR"
 
-mongodump "${DUMP_ARGS[@]}" --out="$CURRENT_BACKUP_DIR"
+if ! mongodump "${DUMP_ARGS[@]}" --out="$CURRENT_BACKUP_DIR"; then
+    rm -rf "${CURRENT_BACKUP_DIR:?}"
+    echo "ERROR: mongodump завершился с ошибкой, неполный бэкап удалён." >&2
+    exit 1
+fi
 
 echo "Mongodump completed successfully."
 
@@ -77,7 +83,31 @@ if [ "$EXCLUDE_ACTIVE" = "true" ] && [ ${#user_dbs[@]} -eq 0 ]; then
     echo "ERROR: после дампа не осталось ни одной пользовательской базы." >&2
     echo "Скорее всего у пользователя '${MONGO_USER}' нет прав listDatabases/readAnyDatabase," >&2
     echo "и mongodump сохранил только системные базы. Укажите MONGO_DB явно." >&2
+    rm -rf "${CURRENT_BACKUP_DIR:?}"
     exit 1
+fi
+
+if [ "$ARCHIVE_BACKUP" = "true" ]; then
+    ARCHIVE_PATH="${CURRENT_BACKUP_DIR}.tar.gz"
+    echo "Creating archive ${ARCHIVE_PATH}..."
+
+    entries=("$CURRENT_BACKUP_DIR"/*)
+    archive_ok=true
+    if [ ${#entries[@]} -eq 0 ]; then
+        archive_ok=false
+    else
+        tar -C "$CURRENT_BACKUP_DIR" -czf "$ARCHIVE_PATH" "${entries[@]##*/}" || archive_ok=false
+    fi
+
+    if [ "$archive_ok" != "true" ]; then
+        rm -f "$ARCHIVE_PATH"
+        rm -rf "${CURRENT_BACKUP_DIR:?}"
+        echo "ERROR: не удалось создать архив, бэкап удалён." >&2
+        exit 1
+    fi
+
+    rm -rf "${CURRENT_BACKUP_DIR:?}"
+    echo "Archive created: ${ARCHIVE_PATH}"
 fi
 
 if [ -n "$MONGO_BACKUP_RETENTION_COUNT" ] && [ "$MONGO_BACKUP_RETENTION_COUNT" -gt 0 ]; then

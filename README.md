@@ -46,13 +46,26 @@ docker run --rm \
   -e MONGO_HOST=mongo \
   -e PASS_DB=secret \
   -e MONGO_BACKUP_RETENTION_COUNT=7 \
-  -v "$PWD/backups:/tmp/backup" \
+  -e BACKUP_DIR=/data/backups/mongo/sfafl-ceorder \
+  -v /data/backups/mongo/sfafl-ceorder:/data/backups/mongo/sfafl-ceorder \
   ghcr.io/durachyo/mongo-dump-images:latest
 ```
 
-Каждый запуск создаёт каталог `/tmp/backup/backup_<YYYYmmdd_HHMMSS>`,
-поэтому его нужно монтировать как volume, чтобы бэкапы сохранялись между
-запусками.
+Каждый запуск создаёт архив
+`$BACKUP_DIR/backup_<YYYYmmdd_HHMMSS>.tar.gz`, поэтому каталог нужно
+монтировать как volume, чтобы бэкапы сохранялись между запусками.
+
+Внутри архива сразу лежат каталоги баз (без лишней обёртки), готовые для
+`mongorestore`:
+
+```bash
+mkdir -p /tmp/restore
+tar -xzf backup_20261029_113918.tar.gz -C /tmp/restore
+mongorestore --dir=/tmp/restore
+```
+
+Если нужен несжатый каталог (например, для `rsync`), отключите архивацию:
+`-e ARCHIVE_BACKUP=false`.
 
 ### Переменные окружения
 
@@ -60,11 +73,13 @@ docker run --rm \
 | --- | --- | --- |
 | `MONGO_HOST` | `localhost` | Хост MongoDB |
 | `MONGO_PORT_TCP_PORT` | `27017` | Порт MongoDB |
+| `BACKUP_DIR` | `/tmp/backup` | Каталог для архивов; монтируйте его как volume |
 | `USER_DB` | `RootAdmin` | Имя пользователя для аутентификации |
 | `PASS_DB` | — | Пароль; если не задан — подключение без аутентификации |
 | `MONGO_DB` | — | База данных для бэкапа; если не задана — дампятся все доступные базы |
 | `MONGO_COLLECTION` | — | Коллекция для бэкапа; требует `MONGO_DB` |
 | `EXCLUDE_SYSTEM_DBS` | `true` | Удалять из бэкапа системные базы `admin`, `local`, `config` |
+| `ARCHIVE_BACKUP` | `true` | Упаковывать дамп в `backup_<ts>.tar.gz` и удалять каталог |
 | `MONGO_BACKUP_RETENTION_COUNT` | — | Сколько последних бэкапов хранить; `0` или пустое значение отключает очистку |
 
 Аутентификация выполняется с `authSource=admin`. Если не задан ни один из
@@ -85,6 +100,7 @@ docker run --rm \
   -e PASS_DB=secret \
   -e MONGO_DB=mydb \
   -e MONGO_COLLECTION=users \
-  -v "$PWD/backups:/tmp/backup" \
+  -e BACKUP_DIR=/data/backups/mongo/sfafl-ceorder \
+  -v /data/backups/mongo/sfafl-ceorder:/data/backups/mongo/sfafl-ceorder \
   ghcr.io/durachyo/mongo-dump-images:latest
 ```
