@@ -60,9 +60,31 @@ docker run --rm \
 | --- | --- | --- |
 | `MONGO_HOST` | `localhost` | Хост MongoDB |
 | `MONGO_PORT_TCP_PORT` | `27017` | Порт MongoDB |
-| `USER_DB` | — | Имя пользователя для аутентификации |
-| `PASS_DB` | — | Пароль; при отсутствии `USER_DB` используется пользователь `admin` |
+| `USER_DB` | `RootAdmin` | Имя пользователя для аутентификации |
+| `PASS_DB` | — | Пароль; если не задан — подключение без аутентификации |
+| `MONGO_DB` | — | База данных для бэкапа; если не задана — дампятся все доступные базы |
+| `MONGO_COLLECTION` | — | Коллекция для бэкапа; требует `MONGO_DB` |
+| `EXCLUDE_SYSTEM_DBS` | `true` | Удалять из бэкапа системные базы `admin`, `local`, `config` |
 | `MONGO_BACKUP_RETENTION_COUNT` | — | Сколько последних бэкапов хранить; `0` или пустое значение отключает очистку |
 
 Аутентификация выполняется с `authSource=admin`. Если не задан ни один из
 `USER_DB` / `PASS_DB`, подключение идёт без аутентификации.
+
+Если `MONGO_DB` не задан, `mongodump` пытается сдампить все базы. Это
+работает только при наличии прав `listDatabases` (роли `backup` или
+`readAnyDatabase`). Без них mongodump может сохранить только базу
+аутентификации (`admin`) — поэтому для бэкапа конкретной базы её лучше
+указывать явно.
+
+### Бэкап одной базы или коллекции
+
+```bash
+docker run --rm \
+  -e MONGO_HOST=mongo \
+  -e USER_DB=backup \
+  -e PASS_DB=secret \
+  -e MONGO_DB=mydb \
+  -e MONGO_COLLECTION=users \
+  -v "$PWD/backups:/tmp/backup" \
+  ghcr.io/durachyo/mongo-dump-images:latest
+```
